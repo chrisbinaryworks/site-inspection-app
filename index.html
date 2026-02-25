@@ -1192,7 +1192,12 @@ async function loadProjects() {
   try {
     // List directories in the file share root
     const url = `https://${CONFIG.STORAGE_ACCOUNT}.file.core.windows.net/${CONFIG.FILE_SHARE}?restype=directory&comp=list&${CONFIG.SAS_TOKEN.replace(/^\?/,'')}`;
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: {
+        'x-ms-version': '2020-10-02',
+        'x-ms-date': new Date().toUTCString(),
+      }
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
 
@@ -1630,6 +1635,9 @@ async function loadImageAsBase64(url) {
 async function saveToAzureFileShare(folderPath, filename, data, contentType) {
   const storageBase = `https://${CONFIG.STORAGE_ACCOUNT}.file.core.windows.net/${CONFIG.FILE_SHARE}`;
   const sasRaw = CONFIG.SAS_TOKEN.replace(/^\?/, '');
+  const msVersion = '2022-11-02';
+  const msDate = new Date().toUTCString();
+  const baseHeaders = { 'x-ms-version': msVersion, 'x-ms-date': msDate };
 
   // Ensure each segment of the folder path exists
   const segments = folderPath.replace(/^\/|\/$/g, '').split('/');
@@ -1637,43 +1645,63 @@ async function saveToAzureFileShare(folderPath, filename, data, contentType) {
   for (const seg of segments) {
     builtPath = builtPath ? `${builtPath}/${seg}` : seg;
     const dirUrl = `${storageBase}/${builtPath}?restype=directory&${sasRaw}`;
-    const check = await fetch(dirUrl, { method: 'GET' });
+    const check = await fetch(dirUrl, { method: 'GET', headers: baseHeaders });
     if (check.status === 404) {
-      const create = await fetch(dirUrl, { method: 'PUT' });
+      const create = await fetch(dirUrl, {
+        method: 'PUT',
+        headers: {
+          ...baseHeaders,
+          'x-ms-file-attributes': 'Directory',
+          'x-ms-file-creation-time': 'now',
+          'x-ms-file-last-write-time': 'now',
+          'x-ms-file-change-time': 'now',
+          'x-ms-file-permission': 'inherit',
+        }
+      });
       if (!create.ok && create.status !== 409) {
         throw new Error(`Failed to create folder: ${builtPath} (${create.status})`);
       }
     }
   }
 
-  // Create the file entry
-  const fileUrl = `${storageBase}/${folderPath}/${filename}?${sasRaw}`;
+  // Create the file entry (reserves space)
+  const fileUrl = `${storageBase}/${encodeURIComponent(folderPath).replace(/%2F/g,'/')}/${encodeURIComponent(filename)}?${sasRaw}`;
   const byteLength = data instanceof ArrayBuffer ? data.byteLength : data.length;
 
   const createRes = await fetch(fileUrl, {
     method: 'PUT',
     headers: {
+      ...baseHeaders,
       'x-ms-type': 'file',
       'x-ms-content-length': String(byteLength),
       'x-ms-file-content-type': contentType,
-      'x-ms-version': '2020-10-02',
+      'x-ms-file-attributes': 'None',
+      'x-ms-file-creation-time': 'now',
+      'x-ms-file-last-write-time': 'now',
+      'x-ms-file-change-time': 'now',
+      'x-ms-file-permission': 'inherit',
     }
   });
-  if (!createRes.ok) throw new Error(`File create failed: ${createRes.status}`);
+  if (!createRes.ok) {
+    const errText = await createRes.text();
+    throw new Error(`File create failed: ${createRes.status} — ${errText}`);
+  }
 
-  // Upload content
+  // Upload content in one range PUT
   const putRes = await fetch(`${fileUrl}&comp=range`, {
     method: 'PUT',
     headers: {
+      ...baseHeaders,
       'x-ms-write': 'update',
       'x-ms-range': `bytes=0-${byteLength - 1}`,
-      'x-ms-version': '2020-10-02',
-      'Content-Type': contentType,
-      'Content-Length': String(byteLength),
+      'Content-Type': 'application/octet-stream',
     },
     body: data
   });
-  if (!putRes.ok) throw new Error(`File upload failed: ${putRes.status}`);
+  if (!putRes.ok) {
+    const errText = await putRes.text();
+    throw new Error(`File upload failed: ${putRes.status} — ${errText}`);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
