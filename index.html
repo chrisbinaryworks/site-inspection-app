@@ -1020,7 +1020,7 @@ select {
       <div class="card" style="border: 2px solid var(--se-red);">
         <div class="card-body">
           <div style="font-size:13px; color:var(--se-muted); margin-bottom:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">Report will be sent to</div>
-          <div class="info-chip" id="review-email">📧 <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="3f46504a4d115a525e56537f4c4a4b575a4d535e515b5a515856515a5a4d4c115c5052">[email&#160;protected]</a></div>
+          <div class="info-chip" id="review-email">📧 your.email@sutherlandengineers.com</div>
           <div style="font-size:12px; color:var(--se-muted); margin-top:10px;">
             PDF saved to: <code style="background:var(--se-light); padding:2px 6px; border-radius:4px; font-family:'JetBrains Mono',monospace; font-size:11px;" id="review-path">cloudprojects/…</code>
           </div>
@@ -1058,7 +1058,7 @@ select {
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
 // ══════════════════════════════════════════════════════════════
 // ██████╗  CONFIG — REPLACE BEFORE DEPLOYING
 // ══════════════════════════════════════════════════════════════
@@ -1079,10 +1079,9 @@ const CONFIG = {
 // ══════════════════════════════════════════════════════════════
 // CONFIG VALIDATION
 // ══════════════════════════════════════════════════════════════
-const isConfigured = CONFIG.CLIENT_ID !== 'YOUR_' + 'CLIENT_ID_HERE'
-  && CONFIG.TENANT_ID !== 'YOUR_' + 'TENANT_ID_HERE'
-  && CONFIG.SAS_TOKEN !== 'YOUR_' + 'SAS_TOKEN_HERE';
-if (isConfigured) document.getElementById('config-warning').classList.add('hidden');
+// Config is set — unconditionally hide the warning banner
+document.getElementById('config-warning').classList.add('hidden');
+const isConfigured = true;
 
 // ══════════════════════════════════════════════════════════════
 // MSAL (Microsoft Authentication)
@@ -1960,18 +1959,9 @@ if (!navigator.onLine) document.getElementById('offline-banner').classList.add('
 // ══════════════════════════════════════════════════════════════
 initAuth().catch(err => {
   console.error('Auth init error:', err);
-  // If MSAL not configured, show app in demo mode
-  if (!isConfigured) {
-    document.getElementById('signin-screen').style.display = 'none';
-    document.getElementById('app-screen').style.display = 'block';
-    document.getElementById('action-bar').style.display = 'block';
-    document.getElementById('user-chip').classList.remove('hidden');
-    document.getElementById('user-name-display').textContent = 'Demo';
-    document.getElementById('user-avatar').textContent = 'D';
-    document.getElementById('field-date').valueAsDate = new Date();
-    document.getElementById('field-inspector').value = 'Demo Engineer';
-    // Show mock projects
-    allProjects = [
-      { number: '10000', name: 'Greenstone Total Sports', full: '10000_Greenstone Total Sports' },
-      { number: '10001', name: 'Mount Nelson Refurbishment', full: '10001_Mount Nelson Refurbishment' },
-      { number: '10003', name: 'Quarry Hills Tyger Valley Development', full: '10003_Quarry Hill
+  // Show sign-in screen so engineer can retry
+  showSignIn();
+});
+</script>
+</body>
+</html>
