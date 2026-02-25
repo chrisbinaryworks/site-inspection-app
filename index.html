@@ -1079,9 +1079,18 @@ const CONFIG = {
 // ══════════════════════════════════════════════════════════════
 // CONFIG VALIDATION
 // ══════════════════════════════════════════════════════════════
-const isConfigured = !['YOUR_CLIENT_ID_HERE','YOUR_TENANT_ID_HERE','YOUR_SAS_TOKEN_HERE']
-  .some(v => Object.values(CONFIG).includes(v));
-if (isConfigured) document.getElementById('config-warning').classList.add('hidden');
+// Treat as configured if these fields look non‑empty and not default
+const isConfigured =
+  !!CONFIG.CLIENT_ID &&
+  !!CONFIG.TENANT_ID &&
+  !!CONFIG.STORAGE_ACCOUNT &&
+  !!CONFIG.FILE_SHARE &&
+  !!CONFIG.SAS_TOKEN &&
+  CONFIG.SAS_TOKEN.startsWith('?sv=');
+
+if (isConfigured) {
+  document.getElementById('config-warning').classList.add('hidden');
+}
 
 // ══════════════════════════════════════════════════════════════
 // MSAL (Microsoft Authentication)
