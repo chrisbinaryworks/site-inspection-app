@@ -1594,7 +1594,7 @@ function buildReviewPanel() {
       ${reviewRow('Inspector', inspector)}
       ${reviewRow('Discipline', discipline)}
       ${reviewRow('Purpose', purpose)}
-      ${reviewRow('Notes', notes || '<em style="color:var(--se-muted)">None</em>')}
+      ${reviewRow('Notes', notes || '<em style="color:var(--se-muted)">None</em>', true)}
       ${reviewRow('Photos', `${photos.length} photo${photos.length !== 1 ? 's' : ''}`)}
     </div>
   `;
@@ -1603,10 +1603,14 @@ function buildReviewPanel() {
   document.getElementById('review-path').textContent = folderPath;
 }
 
-function reviewRow(label, value) {
-  return `<div style="display:flex; gap:12px; align-items:baseline; padding:8px 0; border-bottom:1px solid var(--se-border);">
-    <span style="min-width:90px; font-size:11px; font-weight:700; color:var(--se-muted); text-transform:uppercase; letter-spacing:0.05em; flex-shrink:0;">${label}</span>
-    <span style="font-size:14px;">${value}</span>
+function reviewRow(label, value, preWrap = false) {
+  const valueStyle = preWrap
+    ? 'font-size:14px; white-space:pre-wrap; line-height:1.7; font-family:inherit;'
+    : 'font-size:14px;';
+  const alignStyle = preWrap ? 'align-items:flex-start;' : 'align-items:baseline;';
+  return `<div style="display:flex; gap:12px; ${alignStyle} padding:8px 0; border-bottom:1px solid var(--se-border);">
+    <span style="min-width:90px; font-size:11px; font-weight:700; color:var(--se-muted); text-transform:uppercase; letter-spacing:0.05em; flex-shrink:0; padding-top:2px;">${label}</span>
+    <span style="${valueStyle}">${value}</span>
   </div>`;
 }
 
@@ -1717,9 +1721,25 @@ async function generatePDF() {
     pdf.setFont('helvetica','normal');
     pdf.setFontSize(10);
     pdf.setTextColor(28, 35, 51);
-    const noteLines = pdf.splitTextToSize(notes, CW);
-    pdf.text(noteLines, M, y);
-    y += noteLines.length * 5 + 6;
+    // Split on actual line breaks first, then word-wrap each line
+    const lineH = 5;
+    const rawLines = notes.split('\n');
+    const allLines = [];
+    for (const raw of rawLines) {
+      const wrapped = pdf.splitTextToSize(raw.trimEnd() || ' ', CW);
+      allLines.push(...wrapped);
+    }
+    // Paginate if notes are long
+    for (const line of allLines) {
+      if (y > H - 30) {
+        pdf.addPage();
+        y = 20;
+        addPageHeader(pdf, W, M);
+      }
+      pdf.text(line, M, y);
+      y += lineH;
+    }
+    y += 6;
   }
 
   // ── Photos ──
