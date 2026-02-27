@@ -1719,27 +1719,37 @@ async function generatePDF() {
     y += 5;
 
     pdf.setFont('helvetica','normal');
-    pdf.setFontSize(10);
+    pdf.setFontSize(9.5);
     pdf.setTextColor(28, 35, 51);
-    // Split on actual line breaks first, then word-wrap each line
-    const lineH = 5;
+    const lineH    = 5.5;  // line height for text
+    const paraGap  = 3;    // extra gap between paragraphs (blank lines)
     const rawLines = notes.split('\n');
-    const allLines = [];
+
     for (const raw of rawLines) {
-      const wrapped = pdf.splitTextToSize(raw.trimEnd() || ' ', CW);
-      allLines.push(...wrapped);
-    }
-    // Paginate if notes are long
-    for (const line of allLines) {
-      if (y > H - 30) {
-        pdf.addPage();
-        y = 20;
-        addPageHeader(pdf, W, M);
+      const trimmed = raw.trimEnd();
+
+      // Blank line = paragraph spacer
+      if (trimmed === '') {
+        y += paraGap;
+        continue;
       }
-      pdf.text(line, M, y);
-      y += lineH;
+
+      // Word-wrap this line to content width
+      const wrapped = pdf.splitTextToSize(trimmed, CW);
+      for (const line of wrapped) {
+        if (y > H - 30) {
+          pdf.addPage();
+          y = 20;
+          addPageHeader(pdf, W, M);
+          pdf.setFont('helvetica','normal');
+          pdf.setFontSize(9.5);
+          pdf.setTextColor(28, 35, 51);
+        }
+        pdf.text(line, M, y);
+        y += lineH;
+      }
     }
-    y += 6;
+    y += 8;
   }
 
   // ── Photos ──
