@@ -1048,6 +1048,7 @@ select {
       <li class="progress-item" id="pi-pdf"><span class="pi-icon">⏳</span> Generating PDF</li>
       <li class="progress-item" id="pi-upload"><span class="pi-icon">⏳</span> Saving to Azure File Share</li>
       <li class="progress-item" id="pi-email"><span class="pi-icon">⏳</span> Emailing report</li>
+      <li class="progress-item" id="pi-sync"><span class="pi-icon">⏳</span> Triggering office sync</li>
     </ul>
     <button class="btn btn-outline" id="submit-new-btn" style="max-width:280px; display:none; margin-top:16px;" onclick="resetApp()">
       + New Inspection
@@ -1081,6 +1082,13 @@ const CONFIG = {
   FILE_SHARE:       'cloudprojects',
   SAS_TOKEN:        '?sv=2024-11-04&ss=f&srt=sco&sp=rwdlc&se=2036-02-25T16:37:33Z&st=2026-02-25T08:22:33Z&spr=https&sig=FJ8YbEv9rDMstvyTV1diU9Q6LDSgsHkMO1EHQL%2FMw%2BE%3D',
 
+  // Azure File Sync — change detection
+  SYNC_SUBSCRIPTION_ID: '718dad85-05a4-407e-ab41-9c29b95bb307',
+  SYNC_RESOURCE_GROUP:  'FileSync-EU',
+  SYNC_SERVICE_NAME:    'projectsync-eu',
+  SYNC_GROUP_NAME:      'projectsync-eu',
+  SYNC_CLOUD_ENDPOINT:  'cloudprojects',
+
   // App settings
   REDIRECT_URI:     'https://green-mushroom-05dfdf303.6.azurestaticapps.net/',
 };
@@ -1110,6 +1118,8 @@ const SCOPES = [
   'User.Read',
   'Mail.Send',
 ];
+
+const ARM_SCOPES = ['https://management.azure.com/user_impersonation'];
 
 let currentUser = null;
 let accessToken = null;
@@ -1950,6 +1960,63 @@ async function sendEmailWithPDF(pdfBuffer, filename, folderPath) {
 // ══════════════════════════════════════════════════════════════
 // SUBMIT INSPECTION
 // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// AZURE FILE SYNC — TARGETED CHANGE DETECTION
+// ══════════════════════════════════════════════════════════════
+async function triggerChangeDetection(folderPath) {
+  const syncConfigured = ![
+    CONFIG.SYNC_SUBSCRIPTION_ID,
+    CONFIG.SYNC_RESOURCE_GROUP,
+    CONFIG.SYNC_SERVICE_NAME,
+    CONFIG.SYNC_GROUP_NAME,
+    CONFIG.SYNC_CLOUD_ENDPOINT,
+  ].some(v => v.startsWith('YOUR_'));
+
+  if (!syncConfigured) {
+    console.log('Azure File Sync not configured — skipping change detection');
+    return;
+  }
+
+  // Get ARM token (separate from Graph token)
+  let armToken;
+  try {
+    const result = await msalInstance.acquireTokenSilent({
+      scopes: ARM_SCOPES,
+      account: currentUser
+    });
+    armToken = result.accessToken;
+  } catch(e) {
+    const result = await msalInstance.acquireTokenPopup({ scopes: ARM_SCOPES });
+    armToken = result.accessToken;
+  }
+
+  // The folder path relative to the file share root — target just the new inspection folder
+  // e.g. "10234_ProjectName/Site Inspections/2026-02-27_Structural_Foundation_Inspection"
+  const { SYNC_SUBSCRIPTION_ID, SYNC_RESOURCE_GROUP, SYNC_SERVICE_NAME, SYNC_GROUP_NAME, SYNC_CLOUD_ENDPOINT } = CONFIG;
+
+  const apiUrl = `https://management.azure.com/subscriptions/${SYNC_SUBSCRIPTION_ID}/resourceGroups/${SYNC_RESOURCE_GROUP}/providers/Microsoft.StorageSync/storageSyncServices/${SYNC_SERVICE_NAME}/syncGroups/${SYNC_GROUP_NAME}/cloudEndpoints/${SYNC_CLOUD_ENDPOINT}/triggerChangeDetection?api-version=2022-06-01`;
+
+  const body = {
+    directoryPath: folderPath,
+    changeDetectionMode: 'Recursive',
+  };
+
+  const res = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${armToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body)
+  });
+
+  // 202 Accepted = triggered successfully (it's async on Azure's side)
+  if (!res.ok && res.status !== 202) {
+    const err = await res.text();
+    throw new Error(`Sync trigger failed: ${res.status} — ${err}`);
+  }
+}
+
 async function submitInspection() {
   // Check connectivity
   if (!navigator.onLine) {
@@ -2027,6 +2094,17 @@ async function submitInspection() {
     await sendEmailWithPDF(pdfBuffer, pdfFilename, folderPath);
     setStep('pi-email', 'done', '✓');
 
+    // Step 4: Trigger Azure File Sync change detection on the specific folder
+    setStep('pi-sync', 'active', '⟳');
+    try {
+      await triggerChangeDetection(folderPath);
+      setStep('pi-sync', 'done', '✓');
+    } catch(syncErr) {
+      // Non-fatal — don't fail the whole submission if sync trigger fails
+      console.warn('Sync trigger warning:', syncErr);
+      setStep('pi-sync', 'error-item', '⚠');
+    }
+
     // Success!
     document.getElementById('submit-icon').className = 'submit-icon success';
     document.getElementById('submit-icon').innerHTML = '✅';
@@ -2043,7 +2121,7 @@ async function submitInspection() {
     document.getElementById('submit-sub').textContent = err.message;
 
     // Mark remaining steps as errored
-    ['pi-pdf','pi-upload','pi-email'].forEach(id => {
+    ['pi-pdf','pi-upload','pi-email','pi-sync'].forEach(id => {
       const el = document.getElementById(id);
       if (!el.classList.contains('done')) setStep(id, 'error-item', '✕');
     });
