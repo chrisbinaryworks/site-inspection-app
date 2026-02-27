@@ -950,18 +950,27 @@ select {
           </div>
 
           <div class="field">
-            <label>Purpose of Visit <span class="required-dot"></span></label>
-            <select id="field-purpose">
+            <label>Discipline <span class="required-dot"></span></label>
+            <select id="field-discipline" onchange="updatePurposeOptions()">
               <option value="">Select…</option>
-              <option value="Foundation Inspection">Foundation Inspection</option>
-              <option value="Rebar Inspection">Rebar Inspection</option>
-              <option value="Progress Inspection">Progress Inspection</option>
-              <option value="Concrete Pour Inspection">Concrete Pour Inspection</option>
-              <option value="Waterproofing Inspection">Waterproofing Inspection</option>
-              <option value="Structural Inspection">Structural Inspection</option>
-              <option value="Final Inspection">Final Inspection</option>
-              <option value="Other">Other</option>
+              <option value="Civil">Civil</option>
+              <option value="Electrical">Electrical</option>
+              <option value="Facades">Facades</option>
+              <option value="Mechanical">Mechanical</option>
+              <option value="Structural">Structural</option>
             </select>
+          </div>
+
+          <div class="field" id="purpose-field" style="display:none;">
+            <label>Purpose of Visit <span class="required-dot"></span></label>
+            <select id="field-purpose" onchange="toggleOtherPurpose()">
+              <option value="">Select…</option>
+            </select>
+          </div>
+
+          <div class="field hidden" id="purpose-other-field">
+            <label>Specify Purpose <span class="required-dot"></span></label>
+            <input type="text" id="field-purpose-other" placeholder="Describe the purpose of this visit…">
           </div>
 
           <div class="field">
@@ -1226,6 +1235,142 @@ async function loadProjects() {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// DISCIPLINE & PURPOSE DATA
+// ══════════════════════════════════════════════════════════════
+const DISCIPLINE_PURPOSES = {
+  Civil: [
+    'Bulk Earthworks Inspection',
+    'Drainage & Stormwater Inspection',
+    'Erosion & Sediment Control Inspection',
+    'Final Civil Inspection',
+    'Foundation Excavation Inspection',
+    'Pavement & Road Inspection',
+    'Pipeline & Services Inspection',
+    'Progress Inspection',
+    'Retaining Structure Inspection',
+    'Sewer & Water Reticulation Inspection',
+    'Site Establishment Inspection',
+    'Other',
+  ],
+  Electrical: [
+    'Board & Panel Inspection',
+    'Cable Containment Inspection',
+    'Cable Installation Inspection',
+    'Commissioning Inspection',
+    'DB & MCC Inspection',
+    'Earthing & Lightning Protection Inspection',
+    'Final Electrical Inspection',
+    'Generator & UPS Inspection',
+    'Lighting Installation Inspection',
+    'Progress Inspection',
+    'Switchgear Inspection',
+    'Testing & Commissioning Witness',
+    'Other',
+  ],
+  Facades: [
+    'Air & Water Penetration Test Witness',
+    'Cladding Installation Inspection',
+    'Curtain Wall Installation Inspection',
+    'Final Facades Inspection',
+    'Gasket & Sealant Inspection',
+    'Glazing Inspection',
+    'Mock-up Panel Inspection',
+    'Progress Inspection',
+    'Rainscreen Cladding Inspection',
+    'Structural Fixing & Bracket Inspection',
+    'Thermal & Acoustic Insulation Inspection',
+    'Window & Door Installation Inspection',
+    'Other',
+  ],
+  Mechanical: [
+    'Air Handling Unit Inspection',
+    'Balancing & Commissioning Witness',
+    'Chiller & Boiler Inspection',
+    'Ductwork Installation Inspection',
+    'Final Mechanical Inspection',
+    'Fire Suppression System Inspection',
+    'HVAC Controls Inspection',
+    'Insulation & Cladding Inspection',
+    'Pipework Pressure Test Witness',
+    'Plant Room Inspection',
+    'Plumbing Rough-in Inspection',
+    'Progress Inspection',
+    'Pump & Valve Installation Inspection',
+    'Sanitary Ware Inspection',
+    'Sprinkler System Inspection',
+    'Other',
+  ],
+  Structural: [
+    'Concrete Pour Inspection',
+    'Concrete Sample & Cube Test Witness',
+    'Final Structural Inspection',
+    'Formwork Inspection',
+    'Foundation Inspection',
+    'Pre-cast Element Inspection',
+    'Progress Inspection',
+    'Rebar & Reinforcement Inspection',
+    'Steel Connection Inspection',
+    'Steel Erection Inspection',
+    'Structural Waterproofing Inspection',
+    'Weld Inspection',
+    'Other',
+  ],
+};
+
+const DISCIPLINE_CODES = {
+  Civil: 'C',
+  Electrical: 'E',
+  Facades: 'F',
+  Mechanical: 'M',
+  Structural: 'S',
+};
+
+function updatePurposeOptions() {
+  const discipline = document.getElementById('field-discipline').value;
+  const purposeField = document.getElementById('purpose-field');
+  const purposeSelect = document.getElementById('field-purpose');
+  const otherField = document.getElementById('purpose-other-field');
+
+  // Reset
+  purposeSelect.innerHTML = '<option value="">Select…</option>';
+  document.getElementById('field-purpose-other').value = '';
+  otherField.classList.add('hidden');
+
+  if (!discipline) {
+    purposeField.style.display = 'none';
+    return;
+  }
+
+  const options = DISCIPLINE_PURPOSES[discipline] || [];
+  options.forEach(opt => {
+    const el = document.createElement('option');
+    el.value = opt;
+    el.textContent = opt;
+    purposeSelect.appendChild(el);
+  });
+
+  purposeField.style.display = 'block';
+}
+
+function toggleOtherPurpose() {
+  const purpose = document.getElementById('field-purpose').value;
+  const otherField = document.getElementById('purpose-other-field');
+  otherField.classList.toggle('hidden', purpose !== 'Other');
+}
+
+function getEffectivePurpose() {
+  const purpose = document.getElementById('field-purpose').value;
+  if (purpose === 'Other') {
+    return document.getElementById('field-purpose-other').value.trim() || 'Other';
+  }
+  return purpose;
+}
+
+function getDisciplineCode() {
+  return DISCIPLINE_CODES[document.getElementById('field-discipline').value] || 'X';
+}
+
 function initProjectSearch() {
   const input = document.getElementById('project-search');
   const results = document.getElementById('search-results');
@@ -1412,7 +1557,11 @@ function validateStep(step) {
   if (step === 2) {
     if (!document.getElementById('field-date').value) { showToast('Please enter an inspection date'); return false; }
     if (!document.getElementById('field-inspector').value.trim()) { showToast('Please enter the inspector name'); return false; }
+    if (!document.getElementById('field-discipline').value) { showToast('Please select a discipline'); return false; }
     if (!document.getElementById('field-purpose').value) { showToast('Please select a purpose of visit'); return false; }
+    if (document.getElementById('field-purpose').value === 'Other' && !document.getElementById('field-purpose-other').value.trim()) {
+      showToast('Please describe the purpose of visit'); return false;
+    }
     // Update step 2 subtitle
     document.getElementById('detail-project-sub').textContent = `${selectedProject.number} — ${selectedProject.name}`;
   }
@@ -1422,16 +1571,18 @@ function validateStep(step) {
 function buildReviewPanel() {
   const date = document.getElementById('field-date').value;
   const inspector = document.getElementById('field-inspector').value;
-  const purpose = document.getElementById('field-purpose').value;
+  const discipline = document.getElementById('field-discipline').value;
+  const purpose = getEffectivePurpose();
   const notes = document.getElementById('field-notes').value;
   const email = currentUser?.username || '—';
-  const folderPath = `cloudprojects/${selectedProject.full}/Site Inspections/${date}_${purpose.replace(/ /g,'_')}/`;
+  const folderPath = `cloudprojects/${selectedProject.full}/Site Inspections/${date}_${discipline}_${purpose.replace(/ /g,'_')}/`;
 
   document.getElementById('review-content').innerHTML = `
     <div style="display:grid; gap:8px;">
       ${reviewRow('Project', `${selectedProject.number} — ${selectedProject.name}`)}
       ${reviewRow('Date', formatDate(date))}
       ${reviewRow('Inspector', inspector)}
+      ${reviewRow('Discipline', discipline)}
       ${reviewRow('Purpose', purpose)}
       ${reviewRow('Notes', notes || '<em style="color:var(--se-muted)">None</em>')}
       ${reviewRow('Photos', `${photos.length} photo${photos.length !== 1 ? 's' : ''}`)}
@@ -1463,7 +1614,8 @@ async function generatePDF() {
 
   const date = document.getElementById('field-date').value;
   const inspector = document.getElementById('field-inspector').value;
-  const purpose = document.getElementById('field-purpose').value;
+  const discipline = document.getElementById('field-discipline').value;
+  const purpose = getEffectivePurpose();
   const notes = document.getElementById('field-notes').value;
 
   // ── Header bar ──
@@ -1516,6 +1668,7 @@ async function generatePDF() {
   const fields = [
     ['Inspection Date', formatDate(date)],
     ['Inspected By', inspector],
+    ['Discipline', discipline],
     ['Purpose of Visit', purpose],
     ['Report Generated', new Date().toLocaleString()],
   ];
@@ -1524,6 +1677,7 @@ async function generatePDF() {
   fields.forEach(([label, value], i) => {
     const cx = M + (i % 2) * (colW + 8);
     const cy = y + Math.floor(i / 2) * 18;
+    if (cy + 14 > H - 20) return;
 
     pdf.setFillColor(248, 250, 252);
     pdf.roundedRect(cx, cy, colW, 14, 2, 2, 'F');
@@ -1538,7 +1692,7 @@ async function generatePDF() {
   });
 
   // ── Notes ──
-  y += 44;
+  y += 58;
   if (notes) {
     pdf.setFont('helvetica','bold');
     pdf.setFontSize(9);
@@ -1739,12 +1893,13 @@ async function sendEmailWithPDF(pdfBuffer, filename, folderPath) {
   const email = currentUser.username;
   const inspector = document.getElementById('field-inspector').value;
   const date = document.getElementById('field-date').value;
-  const purpose = document.getElementById('field-purpose').value;
+  const discipline = document.getElementById('field-discipline').value;
+  const purpose = getEffectivePurpose();
 
   const pdfBase64 = arrayBufferToBase64(pdfBuffer);
 
   const message = {
-    subject: `Site Inspection Report — ${selectedProject.number} ${selectedProject.name} — ${formatDate(date)}`,
+    subject: `${pdfFilename.replace('.pdf','')} — ${selectedProject.name} — ${discipline}`,
     body: {
       contentType: 'HTML',
       content: `
@@ -1758,6 +1913,7 @@ async function sendEmailWithPDF(pdfBuffer, filename, folderPath) {
               <tr><td style="padding:8px 0; color:#6B7A99; width:140px;">Project</td><td style="font-weight:600;">${selectedProject.number} — ${selectedProject.name}</td></tr>
               <tr><td style="padding:8px 0; color:#6B7A99;">Date</td><td>${formatDate(date)}</td></tr>
               <tr><td style="padding:8px 0; color:#6B7A99;">Inspector</td><td>${inspector}</td></tr>
+              <tr><td style="padding:8px 0; color:#6B7A99;">Discipline</td><td>${discipline}</td></tr>
               <tr><td style="padding:8px 0; color:#6B7A99;">Purpose</td><td>${purpose}</td></tr>
               <tr><td style="padding:8px 0; color:#6B7A99;">Photos</td><td>${photos.length}</td></tr>
               <tr><td style="padding:8px 0; color:#6B7A99;">Saved to</td><td style="font-family:monospace; font-size:12px; color:#0F3460;">${folderPath}</td></tr>
@@ -1809,10 +1965,30 @@ async function submitInspection() {
   }
 
   const date = document.getElementById('field-date').value;
-  const purpose = document.getElementById('field-purpose').value;
-  const folderName = `${date}_${purpose.replace(/ /g,'_')}`;
+  const discipline = document.getElementById('field-discipline').value;
+  const purpose = getEffectivePurpose();
+  const discCode = getDisciplineCode();
+  const folderName = `${date}_${discipline}_${purpose.replace(/ /g,'_')}`;
   const folderPath = `${selectedProject.full}/Site Inspections/${folderName}`;
-  const pdfFilename = `SiteInspection_${selectedProject.number}_${date}.pdf`;
+
+  // Sequential number: check existing files in folder to determine next XX
+  const dateCompact = date.replace(/-/g, '');
+  const projNum = selectedProject.number;
+  let seqNum = 1;
+  try {
+    const sasRaw = CONFIG.SAS_TOKEN.replace(/^\?/, '');
+    const listUrl = `https://${CONFIG.STORAGE_ACCOUNT}.file.core.windows.net/${CONFIG.FILE_SHARE}/${selectedProject.full}/Site Inspections/${folderName}?restype=directory&comp=list&${sasRaw}`;
+    const listRes = await fetch(listUrl, { headers: { 'x-ms-version': '2022-11-02' } });
+    if (listRes.ok) {
+      const xml = new DOMParser().parseFromString(await listRes.text(), 'text/xml');
+      const files = Array.from(xml.querySelectorAll('File Name')).map(n => n.textContent);
+      const pattern = new RegExp(`^${projNum}-${discCode}-QAR-${dateCompact}-(\\d{2})\\.pdf$`);
+      const nums = files.map(f => { const m = f.match(pattern); return m ? parseInt(m[1]) : 0; }).filter(n => n > 0);
+      if (nums.length > 0) seqNum = Math.max(...nums) + 1;
+    }
+  } catch(e) { /* default to 01 if check fails */ }
+  const seqStr = String(seqNum).padStart(2, '0');
+  const pdfFilename = `${projNum}-${discCode}-QAR-${dateCompact}-${seqStr}.pdf`;
 
   // Switch to submit screen
   document.getElementById('app-screen').querySelector('.container').style.display = 'none';
@@ -1891,7 +2067,9 @@ function saveToOfflineQueue() {
     project: selectedProject,
     date: document.getElementById('field-date').value,
     inspector: document.getElementById('field-inspector').value,
+    discipline: document.getElementById('field-discipline').value,
     purpose: document.getElementById('field-purpose').value,
+    purposeOther: document.getElementById('field-purpose-other').value,
     notes: document.getElementById('field-notes').value,
     photos: photos.map(p => ({ dataUrl: p.dataUrl, caption: p.caption })),
     savedAt: new Date().toISOString(),
@@ -1928,7 +2106,13 @@ document.getElementById('queue-send-btn').addEventListener('click', async () => 
   selectedProject = data.project;
   document.getElementById('field-date').value = data.date;
   document.getElementById('field-inspector').value = data.inspector;
+  document.getElementById('field-discipline').value = data.discipline || '';
+  updatePurposeOptions();
   document.getElementById('field-purpose').value = data.purpose;
+  if (data.purpose === 'Other') {
+    document.getElementById('field-purpose-other').value = data.purposeOther || '';
+    document.getElementById('purpose-other-field').classList.remove('hidden');
+  }
   document.getElementById('field-notes').value = data.notes;
   photos = data.photos.map(p => ({ dataUrl: p.dataUrl, caption: p.caption, file: null }));
   sessionStorage.removeItem('offline_inspection');
@@ -1948,7 +2132,11 @@ function resetApp() {
   document.getElementById('project-search').value = '';
   document.getElementById('selected-project-display').style.display = 'none';
   document.getElementById('field-notes').value = '';
+  document.getElementById('field-discipline').value = '';
   document.getElementById('field-purpose').value = '';
+  document.getElementById('field-purpose-other').value = '';
+  document.getElementById('purpose-field').style.display = 'none';
+  document.getElementById('purpose-other-field').classList.add('hidden');
   document.getElementById('field-date').valueAsDate = new Date();
   document.getElementById('photo-grid').innerHTML = '';
   document.getElementById('photo-count-badge').classList.add('hidden');
