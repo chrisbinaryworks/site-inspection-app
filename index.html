@@ -1899,7 +1899,7 @@ async function sendEmailWithPDF(pdfBuffer, filename, folderPath) {
   const pdfBase64 = arrayBufferToBase64(pdfBuffer);
 
   const message = {
-    subject: `${pdfFilename.replace('.pdf','')} — ${selectedProject.name} — ${discipline}`,
+    subject: `${filename.replace('.pdf','')} — ${selectedProject.name} — ${discipline}`,
     body: {
       contentType: 'HTML',
       content: `
