@@ -1300,7 +1300,8 @@ async function handlePhotoInput(e) {
   if (files.length > remaining) showToast(`Only ${remaining} more photos allowed`);
 
   for (const file of toAdd) {
-    const dataUrl = await readFileAsDataUrl(file);
+    const raw = await readFileAsDataUrl(file);
+    const dataUrl = await compressImage(raw);
     photos.push({ file, dataUrl, caption: '' });
   }
   renderPhotos();
@@ -1312,6 +1313,25 @@ function readFileAsDataUrl(file) {
     const r = new FileReader();
     r.onload = e => resolve(e.target.result);
     r.readAsDataURL(file);
+  });
+}
+
+// Compress image to max 1920px wide and 0.82 JPEG quality
+// Reduces typical phone photo from 10MB+ down to ~500KB-1MB
+function compressImage(dataUrl, maxWidth = 1920, quality = 0.82) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = dataUrl;
   });
 }
 
@@ -1687,20 +1707,28 @@ async function saveToAzureFileShare(folderPath, filename, data, contentType) {
     throw new Error(`File create failed: ${createRes.status} — ${errText}`);
   }
 
-  // Upload content in one range PUT
-  const putRes = await fetch(`${fileUrl}&comp=range`, {
-    method: 'PUT',
-    headers: {
-      ...baseHeaders,
-      'x-ms-write': 'update',
-      'x-ms-range': `bytes=0-${byteLength - 1}`,
-      'Content-Type': 'application/octet-stream',
-    },
-    body: data
-  });
-  if (!putRes.ok) {
-    const errText = await putRes.text();
-    throw new Error(`File upload failed: ${putRes.status} — ${errText}`);
+  // Upload content in 4MB chunks (Azure File Share max per request)
+  const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB
+  const buffer = data instanceof ArrayBuffer ? data : await new Response(data).arrayBuffer();
+  let offset = 0;
+  while (offset < byteLength) {
+    const end = Math.min(offset + CHUNK_SIZE, byteLength);
+    const chunk = buffer.slice(offset, end);
+    const putRes = await fetch(`${fileUrl}&comp=range`, {
+      method: 'PUT',
+      headers: {
+        ...baseHeaders,
+        'x-ms-write': 'update',
+        'x-ms-range': `bytes=${offset}-${end - 1}`,
+        'Content-Type': 'application/octet-stream',
+      },
+      body: chunk
+    });
+    if (!putRes.ok) {
+      const errText = await putRes.text();
+      throw new Error(`File upload failed: ${putRes.status} — ${errText}`);
+    }
+    offset = end;
   }
 }
 
