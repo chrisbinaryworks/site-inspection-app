@@ -62,7 +62,8 @@ body {
   line-height: 1.5;
   border-bottom: 2px solid var(--se-red);
 }
-#config-warning.hidden { display: none; }
+#config-warning { display: none; }
+#config-warning.visible { display: block; }
 
 /* ── HEADER ──────────────────────────────────────────────────── */
 .app-header {
@@ -1261,8 +1262,10 @@ function showApp() {
 
 document.getElementById('signin-btn').addEventListener('click', async () => {
   try {
+    await msalInstance.initialize();
     await msalInstance.loginRedirect({ scopes: SCOPES });
   } catch (e) {
+    console.error('Sign in error:', e);
     showToast('Sign in failed: ' + e.message);
   }
 });
@@ -2389,7 +2392,11 @@ window.addEventListener('online', () => {
 });
 if (!navigator.onLine) document.getElementById('offline-banner').classList.add('visible');
 
-initAuth();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initAuth);
+} else {
+  initAuth();
+}
 
 // ══════════════════════════════════════════════════════════════
 // BOOT
