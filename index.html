@@ -1196,13 +1196,25 @@ let currentUser = null;
 let accessToken = null;
 
 async function initAuth() {
-  await msalInstance.initialize();
-  const response = await msalInstance.handleRedirectPromise();
-  if (response) {
-    currentUser = response.account;
-    accessToken = response.accessToken;
-    showApp();
-  } else {
+  try {
+    await msalInstance.initialize();
+  } catch(e) {
+    console.error('MSAL init failed:', e);
+    showSignIn();
+    return;
+  }
+  try {
+    const response = await msalInstance.handleRedirectPromise();
+    if (response) {
+      currentUser = response.account;
+      accessToken = response.accessToken;
+      showApp();
+      return;
+    }
+  } catch(e) {
+    console.error('handleRedirectPromise failed:', e);
+  }
+  try {
     const accounts = msalInstance.getAllAccounts();
     if (accounts.length > 0) {
       currentUser = accounts[0];
@@ -1211,6 +1223,9 @@ async function initAuth() {
     } else {
       showSignIn();
     }
+  } catch(e) {
+    console.error('Account check failed:', e);
+    showSignIn();
   }
 }
 
@@ -1261,12 +1276,21 @@ function showApp() {
 }
 
 document.getElementById('signin-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('signin-btn');
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
   try {
-    await msalInstance.initialize();
-    await msalInstance.loginRedirect({ scopes: SCOPES });
+    const result = await msalInstance.loginPopup({ scopes: SCOPES });
+    currentUser = result.account;
+    accessToken = result.accessToken;
+    showApp();
   } catch (e) {
     console.error('Sign in error:', e);
-    showToast('Sign in failed: ' + e.message);
+    btn.disabled = false;
+    btn.innerHTML = '<span style="font-size:18px">⊞</span> Sign in with Microsoft';
+    if (e.errorCode !== 'user_cancelled') {
+      showToast('Sign in failed: ' + (e.message || e.errorCode));
+    }
   }
 });
 
